@@ -13,6 +13,7 @@ import { BrandRoutes } from '../module/brand/brand.route';
 import { CategoryRoutes } from '../module/category/category.route';
 import { ProductRoutes } from '../module/product/product.route';
 import { WarehouseRoutes } from '../module/warehouse/warehouse.route';
+import { BaseUnitRoutes } from '../module/baseUnit/baseUnit.route';
 
 const router = express.Router();
 
@@ -44,6 +45,10 @@ const appRoutes = [
   {
     path: '/warehouse',
     routes: WarehouseRoutes,
+  },
+  {
+    path: '/base-units',
+    routes: BaseUnitRoutes,
   },
   {
     path: '/products',
