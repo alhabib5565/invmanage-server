@@ -14,6 +14,7 @@ import { CategoryRoutes } from '../module/category/category.route';
 import { ProductRoutes } from '../module/product/product.route';
 import { WarehouseRoutes } from '../module/warehouse/warehouse.route';
 import { BaseUnitRoutes } from '../module/baseUnit/baseUnit.route';
+import { UnitRoutes } from '../module/unit/unit.route';
 
 const router = express.Router();
 
@@ -49,6 +50,10 @@ const appRoutes = [
   {
     path: '/base-units',
     routes: BaseUnitRoutes,
+  },
+  {
+    path: '/units',
+    routes: UnitRoutes,
   },
   {
     path: '/products',
