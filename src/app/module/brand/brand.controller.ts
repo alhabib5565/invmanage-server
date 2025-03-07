@@ -5,7 +5,9 @@ import { sendResponse } from '../../utils/sendResponse';
 import httpStatus from 'http-status';
 
 const createBrand = catchAsync(async (req: Request, res: Response) => {
-  const result = await BrandService.createBrand(req.body);
+  const file = req.file;
+
+  const result = await BrandService.createBrand(req.body, file);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,

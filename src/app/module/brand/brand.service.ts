@@ -1,11 +1,23 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import httpStatus from 'http-status';
 import { QueryBuilder } from '../../builder/QueryBuilder';
 import AppError from '../../error/AppError';
 import { Brand } from './brand.model';
 import { TBrand } from './brand.interface';
 import { generateSlug } from '../../utils/generateSlug';
+import { sendFileToCloudinary } from '../../utils/sendFileToCloudinary';
 
-const createBrand = async (payload: TBrand) => {
+const createBrand = async (payload: TBrand, file: any) => {
+  // Upload Image
+  if (file) {
+    const imageUpload: any = await sendFileToCloudinary({
+      fileName: file.originalname,
+      fileBuffer: file.buffer,
+      resource_type: 'image',
+    });
+
+    payload.logo = imageUpload.secure_url;
+  }
   payload.slug = generateSlug(payload.name);
   const result = await Brand.create(payload);
   return result;

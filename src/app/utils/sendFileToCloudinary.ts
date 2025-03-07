@@ -38,6 +38,20 @@ export const sendFileToCloudinary = ({
   });
 };
 
+export const deleteFileFromCloudinary = async (public_id: string) => {
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader.destroy(public_id, (error, result) => {
+      if (error) {
+        console.error('Error deleting image:', error);
+        reject(error);
+      } else {
+        console.log('Image deleted:', result);
+        resolve(result);
+      }
+    });
+  });
+};
+
 // Use memory storage since Vercel doesn't support persistent file storage
 const storage = multer.memoryStorage();
 export const upload = multer({ storage: storage });

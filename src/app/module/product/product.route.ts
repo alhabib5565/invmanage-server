@@ -1,17 +1,18 @@
-import express, { NextFunction, Request, Response } from 'express';
+import express from 'express';
 import { ProductController } from './product.controller';
 import { upload } from '../../utils/sendFileToCloudinary';
 
 const router = express.Router();
 
+router.post('/create-product', ProductController.createProduct);
 router.post(
-  '/create-product',
+  '/upload-product-image',
   upload.single('file'),
-  (req: Request, res: Response, next: NextFunction) => {
-    req.body = JSON.parse(req.body.data);
-    next();
-  },
-  ProductController.createProduct,
+  ProductController.uploadProductImage,
+);
+router.delete(
+  '/:public_id/delete-product-image',
+  ProductController.deleteProductImage,
 );
 router.get('/', ProductController.getAllProduct);
 router.get('/:id', ProductController.getSingleProduct);

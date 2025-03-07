@@ -8,56 +8,50 @@ import { generateSlug } from '../../utils/generateSlug';
 import { generateProductId } from './product.utils';
 import { Brand } from '../brand/brand.model';
 import { Category } from '../category/category.model';
-import { sendFileToCloudinary } from '../../utils/sendFileToCloudinary';
+import {
+  deleteFileFromCloudinary,
+  sendFileToCloudinary,
+} from '../../utils/sendFileToCloudinary';
 import mongoose from 'mongoose';
+import { Unit } from '../unit/unit.model';
 
-const createProduct = async (payload: TProduct, file: any) => {
-  if (!file) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Product image is not found');
-  }
+const createProduct = async (payload: TProduct) => {
+  const [purchaseUnit, saleUnit, brand, category] = await Promise.all([
+    Unit.findOne({ _id: payload.purchaseUnit }).populate('baseUnit').lean(),
+    Unit.findOne({ _id: payload.saleUnit }).lean(),
+    Brand.findById(payload.brand).lean(),
+    Category.findById(payload.category).lean(),
+  ]);
+
+  if (!purchaseUnit)
+    throw new AppError(httpStatus.NOT_FOUND, 'Purchase Unit not found!!');
+  if (!saleUnit)
+    throw new AppError(httpStatus.NOT_FOUND, 'Sale Unit not found!!');
+  if (!brand) throw new AppError(httpStatus.NOT_FOUND, 'Brand not found!!');
+  if (!category)
+    throw new AppError(httpStatus.NOT_FOUND, 'Category not found!!');
 
   const session = await mongoose.startSession();
   session.startTransaction();
 
+  // Generate Slug and Product ID
+  payload.slug = generateSlug(payload.productName);
+  payload.productID = await generateProductId();
+
   try {
-    // Generate Slug and Product ID
-    payload.slug = generateSlug(payload.name);
-    payload.productID = await generateProductId();
-
-    // Upload Image
-    const imageUpload: any = await sendFileToCloudinary({
-      fileName: file.originalname,
-      fileBuffer: file.buffer,
-      resource_type: 'image',
-    });
-
-    payload.image = imageUpload.secure_url;
-
-    // Find Brand
-    const brand = await Brand.findById(payload.brand).session(session);
-    if (!brand) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Brand not found!!');
-    }
-
-    // Find Category
-    const category = await Category.findById(payload.category).session(session);
-    if (!category) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Category not found!!');
-    }
-
     // Increment Product Count in Brand
+
     await Brand.findByIdAndUpdate(
       payload.brand,
       { $inc: { productCount: 1 } },
       { session },
-    );
-
-    // Increment Product Count in Category
-    await Category.findByIdAndUpdate(
-      payload.category,
-      { $inc: { productCount: 1 } },
-      { session },
-    );
+    ),
+      // Increment Product Count in Category
+      await Category.findByIdAndUpdate(
+        payload.category,
+        { $inc: { productCount: 1 } },
+        { session },
+      );
 
     // Create Product
     const product = await Product.create([payload], { session });
@@ -72,6 +66,27 @@ const createProduct = async (payload: TProduct, file: any) => {
     session.endSession();
     throw error; // Rethrow for proper error handling
   }
+};
+
+const uploadProductImage = async (file: any) => {
+  if (!file) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Product image is not found');
+  }
+  const imageUpload: any = await sendFileToCloudinary({
+    fileName: file.originalname,
+    fileBuffer: file.buffer,
+    resource_type: 'image',
+  });
+  return imageUpload;
+};
+
+const deleteProductImage = async (public_id: string) => {
+  if (!public_id) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Image Public ID is required');
+  }
+  const result = await deleteFileFromCloudinary(public_id);
+  console.log(result);
+  return result;
 };
 
 const getAllProduct = async (query: Record<string, unknown>) => {
@@ -159,4 +174,6 @@ export const ProductService = {
   getSingleProduct,
   updateProduct,
   deleteProduct,
+  uploadProductImage,
+  deleteProductImage,
 };

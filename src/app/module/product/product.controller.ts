@@ -3,15 +3,37 @@ import { catchAsync } from '../../utils/catchAsync';
 import { ProductService } from './product.service';
 import { sendResponse } from '../../utils/sendResponse';
 import httpStatus from 'http-status';
+import { deleteFileFromCloudinary } from '../../utils/sendFileToCloudinary';
 
 const createProduct = catchAsync(async (req: Request, res: Response) => {
-  const file = req.file;
-  console.log(file);
-  const result = await ProductService.createProduct(req.body, file);
+  const result = await ProductService.createProduct(req.body);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     message: 'Product created successfully.',
+    data: result,
+  });
+});
+
+const uploadProductImage = catchAsync(async (req: Request, res: Response) => {
+  const file = req.file;
+  const result = await ProductService.uploadProductImage(file);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    message: 'File upload successfully.',
+    data: result,
+  });
+});
+
+const deleteProductImage = catchAsync(async (req: Request, res: Response) => {
+  const { public_id } = req.params;
+
+  const result = await deleteFileFromCloudinary(public_id);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    message: 'Image deleted successfully.',
     data: result,
   });
 });
@@ -63,4 +85,6 @@ export const ProductController = {
   getSingleProduct,
   updateProduct,
   deleteProduct,
+  uploadProductImage,
+  deleteProductImage,
 };
