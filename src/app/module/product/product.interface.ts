@@ -7,6 +7,7 @@ export type TProduct = {
   productName: string;
   slug: string;
   productID: string;
+  code: string;
   brand: Types.ObjectId;
   category: Types.ObjectId;
   productUnit: Types.ObjectId;
@@ -17,6 +18,7 @@ export type TProduct = {
   taxType: 'inclusive' | 'exclusive';
   tax?: number;
   stockAlert: number;
+  stock: number;
   images?: TImage[];
   is_active: boolean;
   description: string;

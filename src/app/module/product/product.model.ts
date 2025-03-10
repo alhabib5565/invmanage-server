@@ -14,7 +14,9 @@ const ProductSchema = new Schema<TProduct>(
     productName: { type: String, required: true, trim: true },
     slug: { type: String, required: true, unique: true }, // For SEO-friendly URLs
     productID: { type: String, required: true, unique: true }, // Unique product productID
-    stockAlert: { type: Number, default: 10, alias: 'stock_alert' }, // Minimum stock alert, alias for backward compatibility.
+    code: { type: String, required: true, unique: true }, // Unique product code
+    stockAlert: { type: Number, default: 10 }, // Minimum stock alert, alias for backward compatibility.
+    stock: { type: Number, default: 0 }, // Minimum stock alert, alias for backward compatibility.
     brand: { type: Schema.Types.ObjectId, ref: 'Brand', required: true }, // Reference to Brand
     category: { type: Schema.Types.ObjectId, ref: 'Category', required: true }, // Reference to Category
     tax: { type: Number, default: 0 }, // Tax percentage (if applicable)

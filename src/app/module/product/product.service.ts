@@ -93,7 +93,10 @@ const getAllProduct = async (query: Record<string, unknown>) => {
   const searchAbleFields = ['name', 'slug'];
   const productQuery = new QueryBuilder(
     query,
-    Product.find().populate('brand').populate('category'),
+    Product.find()
+      .populate('brand')
+      .populate('category')
+      .populate('productUnit'),
   )
     .search(searchAbleFields)
     .filter()
@@ -109,18 +112,23 @@ const getAllProduct = async (query: Record<string, unknown>) => {
   };
 };
 
-const getSingleProduct = async (productID: string) => {
-  const result = await Product.findOne({ productID });
+const getSingleProduct = async (slug: string) => {
+  const result = await Product.findOne({ slug })
+    .populate('brand')
+    .populate('category')
+    .populate('productUnit')
+    .populate('saleUnit')
+    .populate('purchaseUnit');
   return result;
 };
 
-const updateProduct = async (productID: string, payload: Partial<TProduct>) => {
-  const product = await Product.findOne({ productID });
+const updateProduct = async (slug: string, payload: Partial<TProduct>) => {
+  const product = await Product.findOne({ slug });
   if (!product) {
     throw new AppError(httpStatus.NOT_FOUND, 'Product not found!!');
   }
 
-  const result = await Product.findOneAndUpdate({ productID }, payload, {
+  const result = await Product.findOneAndUpdate({ slug }, payload, {
     new: true,
   });
   return result;

@@ -2,7 +2,6 @@ import express from 'express';
 import { employee_router } from '../module/employee/employee.route';
 import { authRouter } from '../module/auth/auth.route';
 import { UserRoutes } from '../module/user/user.route';
-import { BookPurchaseRoutes } from '../module/bookPurchase/bookPurchase.route';
 import { EmpBookAssignRoutes } from '../module/empBookAssign/empBookAssign.route';
 import { BookSaleRoutes } from '../module/bookSale/bookSale.route';
 import { BookRoutes } from '../module/book/book.route';
@@ -15,6 +14,7 @@ import { ProductRoutes } from '../module/product/product.route';
 import { WarehouseRoutes } from '../module/warehouse/warehouse.route';
 import { BaseUnitRoutes } from '../module/baseUnit/baseUnit.route';
 import { UnitRoutes } from '../module/unit/unit.route';
+import { PurchaseRoutes } from '../module/purchase/purchase.route';
 
 const router = express.Router();
 
@@ -24,8 +24,8 @@ const appRoutes = [
     routes: UserRoutes,
   },
   {
-    path: '/book-purchases',
-    routes: BookPurchaseRoutes,
+    path: '/purchases',
+    routes: PurchaseRoutes,
   },
   {
     path: '/employees',
