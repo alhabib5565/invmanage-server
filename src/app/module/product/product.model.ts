@@ -1,10 +1,22 @@
 import { Schema, model } from 'mongoose';
-import { TImage, TProduct } from './product.interface';
+import { TImage, TProduct, TStock } from './product.interface';
 
 const imageSchema: Schema = new Schema<TImage>(
   {
     secure_url: { type: String, required: true },
     public_id: { type: String, required: true },
+  },
+  { _id: false },
+);
+
+const StockSchema = new Schema<TStock>(
+  {
+    warehouse: {
+      type: Schema.Types.ObjectId,
+      ref: 'Warehouse',
+      required: true,
+    }, // Warehouse reference
+    quantity: { type: Number, required: true }, // Available stock
   },
   { _id: false },
 );
@@ -16,7 +28,7 @@ const ProductSchema = new Schema<TProduct>(
     productID: { type: String, required: true, unique: true }, // Unique product productID
     code: { type: String, required: true, unique: true }, // Unique product code
     stockAlert: { type: Number, default: 10 }, // Minimum stock alert, alias for backward compatibility.
-    stock: { type: Number, default: 0 }, // Minimum stock alert, alias for backward compatibility.
+    stock: { type: [StockSchema], default: [] },
     brand: { type: Schema.Types.ObjectId, ref: 'Brand', required: true }, // Reference to Brand
     category: { type: Schema.Types.ObjectId, ref: 'Category', required: true }, // Reference to Category
     tax: { type: Number, default: 0 }, // Tax percentage (if applicable)
@@ -43,4 +55,4 @@ const ProductSchema = new Schema<TProduct>(
   { timestamps: true },
 );
 
-export const Product = model('Product', ProductSchema);
+export const Product = model<TProduct>('Product', ProductSchema);

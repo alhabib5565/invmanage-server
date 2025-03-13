@@ -3,6 +3,11 @@ export type TImage = {
   secure_url: string;
   public_id: string;
 };
+
+export type TStock = {
+  warehouse: Types.ObjectId;
+  quantity: number;
+};
 export type TProduct = {
   productName: string;
   slug: string;
@@ -18,7 +23,7 @@ export type TProduct = {
   taxType: 'inclusive' | 'exclusive';
   tax?: number;
   stockAlert: number;
-  stock: number;
+  stock: TStock[];
   images?: TImage[];
   is_active: boolean;
   description: string;
