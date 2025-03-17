@@ -41,6 +41,8 @@ const ProductSchema = new Schema<TProduct>(
     saleUnit: { type: Schema.Types.ObjectId, ref: 'Unit', required: true }, // Reference to Sale Unit
     productCost: { type: Number, required: true },
     productPrice: { type: Number, required: true },
+    discountAmount: { type: Number, required: true, default: 0 },
+
     taxType: {
       type: String,
       enum: ['inclusive', 'exclusive'],

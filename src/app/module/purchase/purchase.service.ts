@@ -1,10 +1,11 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import httpStatus from 'http-status';
 import { QueryBuilder } from '../../builder/QueryBuilder';
 import AppError from '../../error/AppError';
 import { Purchase } from './purchase.model';
 import { TPurchase } from './purchase.interface';
-import { generatePurchaseId } from './purchase.utils';
+import { calculateProductTotals, generatePurchaseId } from './purchase.utils';
 import { startSession } from 'mongoose';
 import { Product } from '../product/product.model';
 import { Warehouse } from '../warehouse/warehouse.model';
@@ -25,15 +26,42 @@ const createPurchase = async (payload: TPurchase) => {
     throw new AppError(httpStatus.NOT_FOUND, 'This warehouse is not found');
   }
 
+  const sumOfAllSubTotal = payload.items.reduce((prev, current) => {
+    const { subTotal } = calculateProductTotals(current);
+    return (prev += subTotal);
+  }, 0);
+
+  const totalTax =
+    (sumOfAllSubTotal - payload?.discountAmount) * (payload.taxRate / 100);
+
+  const grandTotal =
+    sumOfAllSubTotal + totalTax + payload.shipping - payload?.discountAmount;
+  //
+
+  console.log({ sumOfAllSubTotal, totalTax, grandTotal });
+
+  payload.totalPurchaseAmount = grandTotal;
+  payload.dueAmount = grandTotal - payload.paidAmount;
+  payload.taxAmount = totalTax;
+
   try {
     for (const item of payload.items) {
-      const product = await Product.findOne({ _id: item.product })
+      //@ts-ignore
+      const product = await Product.findOne({ _id: item._id })
         .populate('productUnit')
         .populate('purchaseUnit');
       if (!product) {
-        throw new AppError(httpStatus.NOT_FOUND, `${item.name} is not found`);
+        throw new AppError(
+          httpStatus.NOT_FOUND,
+          `${item.productName} is not found`,
+        );
       }
 
+      item.productTaxRate = product.tax || 0;
+
+      const { taxAmount, subTotal, netUnitPrice } =
+        calculateProductTotals(item);
+      console.log({ taxAmount, subTotal, netUnitPrice });
       const purchaseUnit = (product.purchaseUnit as any).operator;
       const conversionRatio = (product.purchaseUnit as any).conversionRatio;
 
@@ -49,16 +77,33 @@ const createPurchase = async (payload: TPurchase) => {
         (stock) =>
           stock?.warehouse?.toString() === payload?.warehouse?.toString(),
       );
+      console.log({ warehouseStock });
+      payload.items = payload.items.map((payloadProductItem) =>
+        //@ts-ignore
+        payloadProductItem._id.toString() === item._id.toString()
+          ? {
+              ...payloadProductItem,
+              //@ts-ignore
+              product: payloadProductItem._id,
+              subTotal,
+              taxAmount,
+              netUnitPrice,
+              productTaxRate: product.tax || 0,
+            }
+          : payloadProductItem,
+      );
 
       if (warehouseStock) {
         await Product.findOneAndUpdate(
-          { _id: item.product, 'stock.warehouse': payload.warehouse },
+          //@ts-ignore
+          { _id: item._id, 'stock.warehouse': payload.warehouse },
           { $inc: { 'stock.$.quantity': baseQuantity } },
           { session },
         );
       } else {
         await Product.findByIdAndUpdate(
-          { _id: item.product },
+          //@ts-ignore
+          { _id: item._id },
           {
             $push: {
               stock: { warehouse: payload.warehouse, quantity: baseQuantity },

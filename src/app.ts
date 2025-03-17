@@ -8,7 +8,6 @@ const app = express();
 
 const allowedOrigins: string[] = [
   'http://localhost:5173',
-  // 'https://invmanage-opal.vercel.app',
   'https://invmanage-eight.vercel.app',
 ];
 
@@ -26,6 +25,10 @@ app.use(
   }),
 );
 app.use(cookieParser());
+
+app.get('/', (req, res) => {
+  res.send('Invmanage Server is running!');
+});
 
 app.use('/api/v1', routes);
 

@@ -2,12 +2,14 @@ import { Types } from 'mongoose';
 // import { TTaxType } from '../../interface/golobal';
 
 export type TPurchaseItem = {
-  name: string;
+  productName: string;
   code: string;
   product: Types.ObjectId;
   productCost: number;
+  productPrice: number;
+  netUnitPrice: number;
   taxType: 'inclusive' | 'exclusive';
-  taxRate: number;
+  productTaxRate: number;
   taxAmount: number;
   discountAmount: number;
   quantity: number;
@@ -19,8 +21,9 @@ export type TPurchase = {
   purchaseId: string;
   warehouse: Types.ObjectId;
   supplier: Types.ObjectId;
-  discount: number;
+  discountAmount: number;
   taxRate: number;
+  shipping: number;
   taxAmount: number;
   items: TPurchaseItem[];
   totalPurchaseAmount: number;
@@ -31,3 +34,5 @@ export type TPurchase = {
 
   notes?: string;
 };
+
+export type TPurchaseItemWithQuanity = TPurchaseItem & { quantity: number };

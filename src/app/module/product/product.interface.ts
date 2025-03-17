@@ -20,6 +20,7 @@ export type TProduct = {
   saleUnit: Types.ObjectId;
   productCost: number;
   productPrice: number;
+  discountAmount: number;
   taxType: 'inclusive' | 'exclusive';
   tax?: number;
   stockAlert: number;
