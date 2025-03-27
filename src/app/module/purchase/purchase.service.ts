@@ -147,18 +147,22 @@ const getAllPurchase = async (query: Record<string, unknown>) => {
 };
 
 const getSinglePurchase = async (purchaseId: string) => {
-  const result = await Purchase.findOne({ purchaseId }).populate(
-    'items.product',
-  );
+  const result = await Purchase.findOne({ purchaseId }).populate({
+    path: 'items.product',
+    populate: {
+      path: 'productUnit',
+      model: 'BaseUnit',
+    },
+  });
   return result;
 };
 
-const updatePurchase = async (_id: string, payload: TPurchase) => {
+const updatePurchase = async (purchaseId: string, payload: TPurchase) => {
   const session = await startSession();
   session.startTransaction();
 
   // Check if purchase exists
-  const purchase = await Purchase.findById(_id);
+  const purchase = await Purchase.findOne({ purchaseId });
   if (!purchase) {
     throw new AppError(httpStatus.NOT_FOUND, 'Purchase not found!!');
   }
@@ -180,13 +184,18 @@ const updatePurchase = async (_id: string, payload: TPurchase) => {
     const { subTotal } = calculateProductTotals(current);
     return (prev += subTotal);
   }, 0);
-
+  console.log({ sumOfAllSubTotal });
   const totalTax =
     (sumOfAllSubTotal - payload?.discountAmount) * (payload.taxRate / 100);
 
   const grandTotal =
-    sumOfAllSubTotal + totalTax + payload.shipping - payload?.discountAmount;
-
+    sumOfAllSubTotal + totalTax + payload.shipping - payload.discountAmount;
+  console.log({
+    grandTotal,
+    totalTax,
+    shipping: payload.shipping,
+    discount: payload.discountAmount,
+  });
   payload.totalPurchaseAmount = grandTotal;
   payload.dueAmount = grandTotal - payload.paidAmount;
   payload.taxAmount = totalTax;
@@ -265,8 +274,7 @@ const updatePurchase = async (_id: string, payload: TPurchase) => {
       }
     }
 
-    payload.purchaseId = await generatePurchaseId();
-    const result = await Purchase.findByIdAndUpdate(purchase._id, payload, {
+    const result = await Purchase.findOneAndUpdate({ purchaseId }, payload, {
       session,
     });
 

@@ -11,8 +11,8 @@ const purchaseItemSchema = new Schema<TPurchaseItem>(
     netUnitPrice: { type: Number, required: true },
     taxType: { type: String, enum: ['inclusive', 'exclusive'], required: true },
     productTaxRate: { type: Number, required: true, default: 0 },
-    taxAmount: { type: Number, required: true, default: 0 },
-    discountAmount: { type: Number, required: true, default: 0 },
+    taxAmount: { type: Number, required: true, default: 0 }, //tax all of quantity
+    discountAmount: { type: Number, required: true, default: 0 }, // ekta quantity te je discount
     quantity: { type: Number, required: true },
     subTotal: { type: Number, required: true },
   },
