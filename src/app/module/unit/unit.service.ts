@@ -36,7 +36,7 @@ const getAllUnit = async (query: Record<string, unknown>) => {
 };
 
 const getSingleUnit = async (slug: string) => {
-  const result = await Unit.findOne({ slug });
+  const result = await Unit.findOne({ slug }).populate('baseUnit');
   return result;
 };
 

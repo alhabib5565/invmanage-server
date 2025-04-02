@@ -16,6 +16,7 @@ import { BaseUnitRoutes } from '../module/baseUnit/baseUnit.route';
 import { UnitRoutes } from '../module/unit/unit.route';
 import { PurchaseRoutes } from '../module/purchase/purchase.route';
 import { PurchaseReturnRoutes } from '../module/purchaseReturn/purchaseReturn.route';
+import { SalesRoutes } from '../module/sales/sales.route';
 
 const router = express.Router();
 
@@ -32,6 +33,11 @@ const appRoutes = [
     path: '/purchase-returns',
     routes: PurchaseReturnRoutes,
   },
+  {
+    path: '/sales',
+    routes: SalesRoutes,
+  },
+
   {
     path: '/employees',
     routes: employee_router,

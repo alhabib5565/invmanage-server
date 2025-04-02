@@ -31,7 +31,7 @@ const ProductSchema = new Schema<TProduct>(
     stock: { type: [StockSchema], default: [] },
     brand: { type: Schema.Types.ObjectId, ref: 'Brand', required: true }, // Reference to Brand
     category: { type: Schema.Types.ObjectId, ref: 'Category', required: true }, // Reference to Category
-    tax: { type: Number, default: 0 }, // Tax percentage (if applicable)
+    productTaxRate: { type: Number, default: 0 }, // Tax percentage (if applicable)
     productUnit: {
       type: Schema.Types.ObjectId,
       ref: 'BaseUnit',
@@ -41,7 +41,7 @@ const ProductSchema = new Schema<TProduct>(
     saleUnit: { type: Schema.Types.ObjectId, ref: 'Unit', required: true }, // Reference to Sale Unit
     productCost: { type: Number, required: true },
     productPrice: { type: Number, required: true },
-    discountAmount: { type: Number, required: true, default: 0 },
+    discountAmount: { type: Number, required: true, default: 0 }, // total discount per unit
 
     taxType: {
       type: String,

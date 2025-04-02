@@ -107,7 +107,6 @@ const createPurchaseReturn = async (payload: TPurchaseReturn) => {
         dueAmount = 0; // Ensure dueAmount never goes negative
       }
 
-      // throw new AppError(BAD_GATEWAY, 'sdfsdsd');
       // Update purchase details
       await Purchase.findOneAndUpdate(
         { _id: payload.purchase, 'items.product': returnItem.product },

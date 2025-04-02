@@ -22,7 +22,7 @@ export type TProduct = {
   productPrice: number;
   discountAmount: number;
   taxType: 'inclusive' | 'exclusive';
-  tax?: number;
+  productTaxRate?: number;
   stockAlert: number;
   stock: TStock[];
   images?: TImage[];

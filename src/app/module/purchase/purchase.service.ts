@@ -57,7 +57,7 @@ const createPurchase = async (payload: TPurchase) => {
         );
       }
 
-      item.productTaxRate = product.tax || 0;
+      item.productTaxRate = product.productTaxRate || 0;
 
       const { taxAmount, subTotal, netUnitPrice } =
         calculateProductTotals(item);
@@ -88,7 +88,7 @@ const createPurchase = async (payload: TPurchase) => {
               subTotal,
               taxAmount,
               netUnitPrice,
-              productTaxRate: product.tax || 0,
+              productTaxRate: product.productTaxRate || 0,
             }
           : payloadProductItem,
       );
@@ -130,7 +130,7 @@ const createPurchase = async (payload: TPurchase) => {
 };
 
 const getAllPurchase = async (query: Record<string, unknown>) => {
-  const searchAbleFields = ['name', 'email'];
+  const searchAbleFields = ['name', 'purchaseId'];
   const purchaseQuery = new QueryBuilder(query, Purchase.find())
     .search(searchAbleFields)
     .filter()
@@ -225,7 +225,7 @@ const updatePurchase = async (purchaseId: string, payload: TPurchase) => {
       );
 
       // Recalculate item values
-      item.productTaxRate = product.tax || 0;
+      item.productTaxRate = product.productTaxRate || 0;
       const { taxAmount, subTotal, netUnitPrice } =
         calculateProductTotals(item);
 
@@ -238,7 +238,7 @@ const updatePurchase = async (purchaseId: string, payload: TPurchase) => {
               subTotal,
               taxAmount,
               netUnitPrice,
-              productTaxRate: product.tax || 0,
+              productTaxRate: product.productTaxRate || 0,
             }
           : payloadProductItem,
       );

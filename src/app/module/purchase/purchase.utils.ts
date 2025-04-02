@@ -1,16 +1,33 @@
 import { TPurchaseItemWithQuanity } from './purchase.interface';
 import { Purchase } from './purchase.model';
 
-export const generatePurchaseId = async () => {
-  let currentId = '0';
+const findLastPurchase = async () => {
+  const lastPurchase = await Purchase.findOne(
+    {},
+    {
+      purchaseId: 1,
+      _id: 0,
+    },
+  )
+    .sort({
+      createdAt: -1,
+    })
+    .lean();
+  return lastPurchase?.purchaseId ? lastPurchase.purchaseId : undefined;
+};
 
-  const lastPurchaseId = await Purchase.findOne({}, { purchaseId: 1 }).sort({
-    createdAt: -1,
-  });
+export const generatePurchaseId = async () => {
+  let currentId = (0).toString();
+  const lastPurchaseId = await findLastPurchase();
   if (lastPurchaseId) {
-    currentId = lastPurchaseId.purchaseId;
+    currentId = lastPurchaseId.substring(3);
   }
-  return (Number(currentId) + 1).toString().padStart(4, '0');
+
+  let incrementId = (Number(currentId) + 1).toString().padStart(4, '0');
+
+  incrementId = `PU-${incrementId}`;
+
+  return incrementId;
 };
 
 export const calculateProductTotals = (product: TPurchaseItemWithQuanity) => {
