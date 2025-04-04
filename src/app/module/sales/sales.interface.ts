@@ -15,7 +15,7 @@ export type TSalesItem = {
   discountAmount: number;
   quantity: number;
   subTotal: number;
-  // isDeleted: boolean;
+  isDeleted?: boolean;
 };
 
 export type TSales = {

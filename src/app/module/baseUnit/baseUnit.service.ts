@@ -13,7 +13,7 @@ const createBaseUnit = async (payload: TBaseUnit) => {
 };
 
 const getAllBaseUnit = async (query: Record<string, unknown>) => {
-  const searchAbleFields = ['name', 'slug'];
+  const searchAbleFields = ['name', 'slug', 'description'];
   const baseUnitQuery = new QueryBuilder(query, BaseUnit.find())
     .search(searchAbleFields)
     .filter()

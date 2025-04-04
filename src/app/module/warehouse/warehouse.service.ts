@@ -12,7 +12,17 @@ const createWarehouse = async (payload: TWarehouse) => {
 };
 
 const getAllWarehouse = async (query: Record<string, unknown>) => {
-  const searchAbleFields = ['name', 'slug'];
+  const searchAbleFields = [
+    'name',
+    'slug',
+    'email',
+    'division',
+    'address',
+    'zipCode',
+    'district',
+    'mobileNumber',
+    'notes',
+  ];
   const warehouseQuery = new QueryBuilder(query, Warehouse.find())
     .search(searchAbleFields)
     .filter()

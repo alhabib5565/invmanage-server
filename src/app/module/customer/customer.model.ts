@@ -11,8 +11,8 @@ const CustomerSchema = new Schema<TCustomer>(
     companyName: { type: String },
     user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     gender: { type: String, enum: Gender, required: true },
-    district: { type: String, required: true },
     thana: { type: String, required: true },
+    district: { type: String, required: true },
     homeAddress: { type: String, required: true },
     totalPurchased: { type: Number, default: 0 }, // Total buy kora amount
     totalPaid: { type: Number, default: 0 }, // Total pay kora amount

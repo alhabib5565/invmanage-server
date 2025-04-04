@@ -7,6 +7,7 @@ export type TPaymentRecord = {
   collectedBy: Types.ObjectId;
   amountCollected: number;
   paymentMethod: 'Cash' | 'Card' | 'Bkash' | 'Bank Transfer';
+  isPaidDuringSale: boolean;
   paymentDate: Date;
   notes?: string; // Optional notes
   createdAt?: Date; // Added by timestamps

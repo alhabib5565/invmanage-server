@@ -18,6 +18,7 @@ const PaymentRecordSchema = new Schema<TPaymentRecord>(
       required: true,
       default: 'Cash',
     },
+    isPaidDuringSale: { type: Boolean, default: false },
     paymentDate: { type: Date, default: Date.now },
     notes: { type: String },
   },

@@ -41,10 +41,11 @@ const createSales = async (payload: TSales) => {
   })
     // .populate('productUnit')
     .populate('saleUnit');
+  const bulkSalesProduct = [];
+
   const session = await startSession();
   session.startTransaction();
 
-  const bulkSalesProduct = [];
   try {
     //Start Loop=======================
     for (const item of payload.items) {
@@ -93,7 +94,7 @@ const createSales = async (payload: TSales) => {
       if (!warehouseStock) {
         throw new AppError(
           httpStatus.BAD_REQUEST,
-          `Product "${product.productName}" not purchased. Cannot proceed with the sale.`,
+          `Product "${product.productName}" not saled. Cannot proceed with the sale.`,
         );
       }
 
@@ -117,12 +118,6 @@ const createSales = async (payload: TSales) => {
             }
           : payloadProductItem,
       );
-
-      // await Product.findOneAndUpdate(
-      //   { _id: item.product, 'stock.warehouse': payload.warehouse },
-      //   { $inc: { 'stock.$.quantity': -baseQuantity } },
-      //   { session },
-      // );
 
       // **Bulk Update Operation**
       bulkSalesProduct.push({
@@ -168,6 +163,7 @@ const createSales = async (payload: TSales) => {
         sale: saleData[0]._id,
         paymentId: await generatePaymentRecordId(),
         amountCollected: payload.paidAmount,
+        isPaidDuringSale: true,
       };
 
       await PaymentRecord.create([paymentsData], { session });
@@ -199,24 +195,27 @@ const createSales = async (payload: TSales) => {
 };
 
 const getAllSales = async (query: Record<string, unknown>) => {
-  const searchAbleFields = ['name', 'salesId'];
-  const purchaseQuery = new QueryBuilder(query, Sales.find())
+  const searchAbleFields = ['salesId', 'notes'];
+  const saleQuery = new QueryBuilder(
+    query,
+    Sales.find().populate('customer').populate('warehouse'),
+  )
     .search(searchAbleFields)
     .filter()
     .sort()
     .paginate()
     .fields();
 
-  const meta = await purchaseQuery.countTotal();
-  const result = await purchaseQuery.modelQuery;
+  const meta = await saleQuery.countTotal();
+  const result = await saleQuery.modelQuery;
   return {
     meta,
     result,
   };
 };
 
-const getSingleSales = async (purchaseId: string) => {
-  const result = await Sales.findOne({ purchaseId }).populate({
+const getSingleSales = async (salesId: string) => {
+  const result = await Sales.findOne({ salesId }).populate({
     path: 'items.product',
     populate: {
       path: 'productUnit',
@@ -227,7 +226,193 @@ const getSingleSales = async (purchaseId: string) => {
 };
 
 const updateSales = async (salesId: string, payload: TSales) => {
-  console.log(salesId, payload);
+  // Check if sale exists
+  const sale = await Sales.findOne({ salesId }).lean();
+  if (!sale) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Sale not found!!');
+  }
+
+  // Check if products exist
+  if (!payload?.items || payload.items.length === 0) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Please select products.');
+  }
+
+  const updatedSaleItems = [];
+
+  const salesProductItems = await Product.find({
+    _id: { $in: payload.items.map((item) => item.product) },
+  })
+    .populate('saleUnit')
+    .lean();
+
+  const session = await startSession();
+  session.startTransaction();
+
+  try {
+    //Start Loop=======================
+    for (const item of payload.items) {
+      const product = salesProductItems.find(
+        (itemFromPayload) =>
+          itemFromPayload._id.toString() === item.product.toString(),
+      );
+
+      if (!product) {
+        throw new AppError(
+          httpStatus.NOT_FOUND,
+          `${item.productName} is not found within product collection`,
+        );
+      }
+
+      // find the product from sale
+      const isProductExistWithinSale = sale.items.find(
+        (saleItem) => saleItem.product.toString() === item.product.toString(),
+      );
+      if (!isProductExistWithinSale) {
+        throw new AppError(
+          httpStatus.NOT_FOUND,
+          `Product "${product.productName}" not saled.`,
+        );
+      }
+
+      const oldWarehouseStock = product.stock.find(
+        (stock) => stock?.warehouse?.toString() === sale.warehouse?.toString(),
+      );
+
+      if (!oldWarehouseStock) {
+        throw new AppError(
+          httpStatus.NOT_FOUND,
+          `The product is not exist in the warehouse`,
+        );
+      }
+
+      const { saleUnit: saleUnitOperator, conversionRatio } =
+        product.saleUnit as any;
+
+      // Determine quantity difference
+      const quantityDifference = item.isDeleted
+        ? isProductExistWithinSale.quantity
+        : isProductExistWithinSale.quantity - item.quantity;
+
+      const updatedItemQuantity =
+        saleUnitOperator === '*'
+          ? quantityDifference * conversionRatio
+          : quantityDifference / conversionRatio;
+
+      if (
+        // if the product deleted from the sale
+        item.isDeleted
+      ) {
+        // romove product from the items and increase quanity from product stock
+
+        await Product.findOneAndUpdate(
+          { _id: item.product, 'stock.warehouse': payload.warehouse },
+          { $inc: { 'stock.$.quantity': updatedItemQuantity } },
+          { session },
+        );
+      } else if (isProductExistWithinSale.quantity === item.quantity) {
+        // no need any changes because the quantity stil same
+        updatedSaleItems.push(isProductExistWithinSale);
+      } else {
+        // product quantity changed, so that I need to update product stock and the item in the sale
+        const { productTaxRate, productPrice, discountAmount, taxType } =
+          product;
+        const { taxAmount, subTotal, netUnitPrice } = calculateProductTotals({
+          quantity: item.quantity,
+          taxType,
+          productPrice,
+          productTaxRate,
+          discountAmount,
+        });
+
+        updatedSaleItems.push({
+          ...product,
+          quantity: item.quantity,
+          product: product._id,
+          saleUnit: product.saleUnit._id,
+          subTotal,
+          taxAmount,
+          netUnitPrice,
+          productTaxRate: product.productTaxRate || 0,
+        });
+
+        await Product.findOneAndUpdate(
+          { _id: item.product, 'stock.warehouse': payload.warehouse },
+          { $inc: { 'stock.$.quantity': updatedItemQuantity } },
+          { session },
+        );
+      }
+    }
+    payload.items = updatedSaleItems;
+
+    const sumOfAllSubTotal = payload.items.reduce((prev, current) => {
+      return (prev += current.subTotal);
+    }, 0);
+
+    if (sumOfAllSubTotal < payload.discountAmount) {
+      throw new AppError(
+        httpStatus.NOT_FOUND,
+        'Discount cannot exceed subtotal',
+      );
+    }
+    const totalTax =
+      (sumOfAllSubTotal - payload?.discountAmount) * (payload.taxRate / 100);
+
+    const grandTotal =
+      sumOfAllSubTotal + totalTax + payload.shipping - payload?.discountAmount;
+
+    payload.totalSalesAmount = grandTotal;
+    payload.dueAmount = grandTotal - payload.paidAmount;
+    payload.taxAmount = totalTax;
+
+    // Amount Calculation
+    const dueAmountDifference = payload.dueAmount - sale.dueAmount;
+    const paidAmountDifference = payload.paidAmount - sale.paidAmount;
+    const totalSaleAmountDifference =
+      payload.totalSalesAmount - sale.totalSalesAmount;
+
+    // Step 1: Update Sale
+    const result = await Sales.findOneAndUpdate({ salesId }, payload, {
+      session,
+      new: true,
+    });
+
+    // Step 2: Payment Collect (Jodi kono payment thake)
+    if (paidAmountDifference !== 0) {
+      await PaymentRecord.findOneAndUpdate(
+        { sale: sale._id, isPaidDuringSale: true },
+        { $inc: { amountCollected: paidAmountDifference } },
+        { session },
+      );
+    }
+
+    // Step 3: Customer Update
+    if (
+      totalSaleAmountDifference !== 0 ||
+      dueAmountDifference !== 0 ||
+      paidAmountDifference !== 0
+    )
+      await Customer.findOneAndUpdate(
+        { _id: payload.customer },
+        {
+          $inc: {
+            totalPurchased: totalSaleAmountDifference,
+            totalPaid: paidAmountDifference,
+            totalDue: dueAmountDifference,
+          },
+        },
+        { session },
+      );
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    return result;
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
+  }
 };
 
 const deleteSales = async (salesId: string) => {

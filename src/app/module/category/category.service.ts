@@ -12,7 +12,7 @@ const createCategory = async (payload: TCategory) => {
 };
 
 const getAllCategory = async (query: Record<string, unknown>) => {
-  const searchAbleFields = ['name', 'slug'];
+  const searchAbleFields = ['name', 'slug', 'description'];
   const categoryQuery = new QueryBuilder(query, Category.find())
     .search(searchAbleFields)
     .filter()

@@ -90,7 +90,13 @@ const deleteProductImage = async (public_id: string) => {
 };
 
 const getAllProduct = async (query: Record<string, unknown>) => {
-  const searchAbleFields = ['name', 'slug'];
+  const searchAbleFields = [
+    'productName',
+    'slug',
+    'productID',
+    'code',
+    'description',
+  ];
   const productQuery = new QueryBuilder(
     query,
     Product.find()

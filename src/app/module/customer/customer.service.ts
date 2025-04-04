@@ -7,7 +7,17 @@ import { User } from '../user/user.model';
 import { startSession } from 'mongoose';
 
 const getAllCustomer = async (query: Record<string, unknown>) => {
-  const searchAbleFields = ['name', 'email', 'companyName', 'mobileNumber'];
+  const searchAbleFields = [
+    'name',
+    'email',
+    'companyName',
+    'mobileNumber',
+    'gender',
+    'mobileNumber',
+    'customerID',
+    'homeAddress',
+    'district',
+  ];
   const customerQuery = new QueryBuilder(query, Customer.find())
     .search(searchAbleFields)
     .filter()

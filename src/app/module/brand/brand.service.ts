@@ -24,7 +24,7 @@ const createBrand = async (payload: TBrand, file: any) => {
 };
 
 const getAllBrand = async (query: Record<string, unknown>) => {
-  const searchAbleFields = ['name', 'slug'];
+  const searchAbleFields = ['name', 'slug', 'description'];
   const brandQuery = new QueryBuilder(query, Brand.find())
     .search(searchAbleFields)
     .filter()

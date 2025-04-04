@@ -130,7 +130,7 @@ const createPurchase = async (payload: TPurchase) => {
 };
 
 const getAllPurchase = async (query: Record<string, unknown>) => {
-  const searchAbleFields = ['name', 'purchaseId'];
+  const searchAbleFields = ['notes', 'purchaseId'];
   const purchaseQuery = new QueryBuilder(query, Purchase.find())
     .search(searchAbleFields)
     .filter()
