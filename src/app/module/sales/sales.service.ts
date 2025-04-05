@@ -38,9 +38,7 @@ const createSales = async (payload: TSales) => {
 
   const salesProductItems = await Product.find({
     _id: { $in: payload.items.map((item) => item.product) },
-  })
-    // .populate('productUnit')
-    .populate('saleUnit');
+  }).populate('saleUnit');
   const bulkSalesProduct = [];
 
   const session = await startSession();
@@ -49,10 +47,6 @@ const createSales = async (payload: TSales) => {
   try {
     //Start Loop=======================
     for (const item of payload.items) {
-      // const product = await Product.findOne({ _id: item.product })
-      //   // .populate('productUnit')
-      //   .populate('saleUnit');
-
       const product = salesProductItems.find(
         (itemFromPayload) =>
           itemFromPayload._id.toString() === item.product.toString(),
@@ -73,7 +67,6 @@ const createSales = async (payload: TSales) => {
         discountAmount,
       });
 
-      // console.log({ taxAmount, subTotal, netUnitPrice });
       const saleUnitOperator = (product.saleUnit as any).operator;
       const conversionRatio = (product.saleUnit as any).conversionRatio;
 
@@ -263,11 +256,17 @@ const updateSales = async (salesId: string, payload: TSales) => {
         );
       }
 
+      /**
+       * 1. new product add kora jai na// karon notun add kora product ta ager sale items er vitore exist kore na
+       * 2. prodct sale theke remove kore dile quantity increase hoi na.// ok but frotned theke deleted item ta ase na
+       */
+
       // find the product from sale
       const isProductExistWithinSale = sale.items.find(
         (saleItem) => saleItem.product.toString() === item.product.toString(),
       );
-      if (!isProductExistWithinSale) {
+      //'AddedWhenEdit' thakbe na jokhon product ta agei sale hoiche or sale theke remove kora hoiche
+      if (!isProductExistWithinSale && !item.AddedWhenEdit) {
         throw new AppError(
           httpStatus.NOT_FOUND,
           `Product "${product.productName}" not saled.`,
@@ -287,17 +286,31 @@ const updateSales = async (salesId: string, payload: TSales) => {
 
       const { saleUnit: saleUnitOperator, conversionRatio } =
         product.saleUnit as any;
+      // Determine quantity difference
+      // const quantityDifference =
+      //   (item.isDeleted
+      //     ? isProductExistWithinSale?.quantity
+      //     : item.AddedWhenEdit
+      //       ? item.quantity
+      //       : isProductExistWithinSale?.quantity - item.quantity) || 0;
 
       // Determine quantity difference
-      const quantityDifference = item.isDeleted
-        ? isProductExistWithinSale.quantity
-        : isProductExistWithinSale.quantity - item.quantity;
+      let quantityDifference = 0;
+      if (item.isDeleted && isProductExistWithinSale) {
+        quantityDifference = isProductExistWithinSale.quantity;
+      } else if (item.AddedWhenEdit) {
+        quantityDifference = -item.quantity;
+      } else if (isProductExistWithinSale) {
+        quantityDifference = isProductExistWithinSale.quantity - item.quantity;
+      } else {
+        console.log('else blo');
+        quantityDifference = 0;
+      }
 
       const updatedItemQuantity =
         saleUnitOperator === '*'
           ? quantityDifference * conversionRatio
           : quantityDifference / conversionRatio;
-
       if (
         // if the product deleted from the sale
         item.isDeleted
@@ -307,9 +320,9 @@ const updateSales = async (salesId: string, payload: TSales) => {
         await Product.findOneAndUpdate(
           { _id: item.product, 'stock.warehouse': payload.warehouse },
           { $inc: { 'stock.$.quantity': updatedItemQuantity } },
-          { session },
+          { session, new: true },
         );
-      } else if (isProductExistWithinSale.quantity === item.quantity) {
+      } else if (isProductExistWithinSale?.quantity === item.quantity) {
         // no need any changes because the quantity stil same
         updatedSaleItems.push(isProductExistWithinSale);
       } else {
@@ -342,8 +355,8 @@ const updateSales = async (salesId: string, payload: TSales) => {
         );
       }
     }
+    //============== Loop End ====================
     payload.items = updatedSaleItems;
-
     const sumOfAllSubTotal = payload.items.reduce((prev, current) => {
       return (prev += current.subTotal);
     }, 0);
@@ -369,7 +382,6 @@ const updateSales = async (salesId: string, payload: TSales) => {
     const paidAmountDifference = payload.paidAmount - sale.paidAmount;
     const totalSaleAmountDifference =
       payload.totalSalesAmount - sale.totalSalesAmount;
-
     // Step 1: Update Sale
     const result = await Sales.findOneAndUpdate({ salesId }, payload, {
       session,

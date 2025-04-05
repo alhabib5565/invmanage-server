@@ -10,6 +10,6 @@ export type TPaymentRecord = {
   isPaidDuringSale: boolean;
   paymentDate: Date;
   notes?: string; // Optional notes
-  createdAt?: Date; // Added by timestamps
-  updatedAt?: Date; // Added by timestamps
+  createdAt?: Date;
+  updatedAt?: Date;
 };

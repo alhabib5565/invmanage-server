@@ -16,6 +16,7 @@ export type TSalesItem = {
   quantity: number;
   subTotal: number;
   isDeleted?: boolean;
+  AddedWhenEdit?: boolean;
 };
 
 export type TSales = {
