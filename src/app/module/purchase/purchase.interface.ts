@@ -14,7 +14,8 @@ export type TPurchaseItem = {
   discountAmount: number;
   quantity: number;
   subTotal: number;
-  isDeleted: boolean;
+  isDeleted?: boolean;
+  AddedWhenEdit?: boolean;
 };
 
 export type TPurchase = {

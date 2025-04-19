@@ -5,10 +5,11 @@ import { QueryBuilder } from '../../builder/QueryBuilder';
 import AppError from '../../error/AppError';
 import { Purchase } from './purchase.model';
 import { TPurchase } from './purchase.interface';
-import { calculateProductTotals, generatePurchaseId } from './purchase.utils';
+import { generatePurchaseId } from './purchase.utils';
 import { startSession } from 'mongoose';
 import { Product } from '../product/product.model';
 import { Warehouse } from '../warehouse/warehouse.model';
+import { calculateProductTotals } from '../../utils/common.utils';
 
 const createPurchase = async (payload: TPurchase) => {
   const session = await startSession();
@@ -158,9 +159,6 @@ const getSinglePurchase = async (purchaseId: string) => {
 };
 
 const updatePurchase = async (purchaseId: string, payload: TPurchase) => {
-  const session = await startSession();
-  session.startTransaction();
-
   // Check if purchase exists
   const purchase = await Purchase.findOne({ purchaseId });
   if (!purchase) {
@@ -172,108 +170,147 @@ const updatePurchase = async (purchaseId: string, payload: TPurchase) => {
     throw new AppError(httpStatus.BAD_REQUEST, 'Please select products.');
   }
 
-  // Clone previous payload items
-  const previousItems = payload.items.map((item) => ({ ...item }));
+  const updatedItems = [];
 
-  // Remove deleted items & update purchase
-  const newItems = payload.items.filter((item) => !item.isDeleted);
-  purchase.items = newItems;
-
-  //  Recalculate Totals
-  const sumOfAllSubTotal = payload.items.reduce((prev, current) => {
-    const { subTotal } = calculateProductTotals(current);
-    return (prev += subTotal);
-  }, 0);
-  console.log({ sumOfAllSubTotal });
-  const totalTax =
-    (sumOfAllSubTotal - payload?.discountAmount) * (payload.taxRate / 100);
-
-  const grandTotal =
-    sumOfAllSubTotal + totalTax + payload.shipping - payload.discountAmount;
-  console.log({
-    grandTotal,
-    totalTax,
-    shipping: payload.shipping,
-    discount: payload.discountAmount,
-  });
-  payload.totalPurchaseAmount = grandTotal;
-  payload.dueAmount = grandTotal - payload.paidAmount;
-  payload.taxAmount = totalTax;
+  const purchaseItemsFormDB = await Product.find({
+    _id: { $in: payload.items.map((item) => item.product) },
+  })
+    .populate('purchaseUnit')
+    .select({
+      brand: 0,
+      category: 0,
+      slug: 0,
+      images: 0,
+      description: 0,
+      saleUnit: 0,
+    })
+    .lean();
+  const session = await startSession();
+  session.startTransaction();
 
   try {
-    for (const item of previousItems) {
-      //@ts-ignore
-      const product = await Product.findOne({ _id: item.product })
-        .populate('productUnit')
-        .populate('purchaseUnit');
+    //Start Loop=======================
+    for (const item of payload.items) {
+      const product = purchaseItemsFormDB.find(
+        (itemFromPayload) =>
+          itemFromPayload._id.toString() === item.product.toString(),
+      );
+
       if (!product) {
         throw new AppError(
           httpStatus.NOT_FOUND,
-          `${item.productName} is not found`,
+          `${item.productName} is not found within product collection`,
         );
       }
 
-      const { purchaseUnit, conversionRatio } = product.purchaseUnit as any;
-      const updatedItemQuantity =
-        purchaseUnit === '*'
-          ? item.quantity * conversionRatio
-          : item.quantity / conversionRatio;
+      // find the product from purchase
+      const isProductExistWithinPurchase = purchase.items.find(
+        (purchaseItem) =>
+          purchaseItem.product.toString() === item.product.toString(),
+      );
+      //'AddedWhenEdit' thakbe na jokhon product ta agei purchase hoiche or purchase theke remove kora hoiche
+      if (!isProductExistWithinPurchase && !item.AddedWhenEdit) {
+        throw new AppError(
+          httpStatus.NOT_FOUND,
+          `Product "${product.productName}" not purchased.`,
+        );
+      }
 
       const oldWarehouseStock = product.stock.find(
         (stock) =>
-          stock?.warehouse?.toString() === payload?.warehouse?.toString(),
+          stock?.warehouse?.toString() === purchase.warehouse?.toString(),
       );
 
-      // Recalculate item values
-      item.productTaxRate = product.productTaxRate || 0;
-      const { taxAmount, subTotal, netUnitPrice } =
-        calculateProductTotals(item);
+      if (!oldWarehouseStock) {
+        throw new AppError(
+          httpStatus.NOT_FOUND,
+          `The product is not exist in the warehouse`,
+        );
+      }
 
-      // Update payload items
-      payload.items = payload.items.map((payloadProductItem) =>
-        payloadProductItem.product.toString() === item.product.toString()
-          ? {
-              ...payloadProductItem,
-              product: payloadProductItem.product,
-              subTotal,
-              taxAmount,
-              netUnitPrice,
-              productTaxRate: product.productTaxRate || 0,
-            }
-          : payloadProductItem,
-      );
-
+      const { operator, conversionRatio } = product.purchaseUnit as any;
       // Determine quantity difference
       let quantityDifference = 0;
-      if (item.isDeleted) {
-        quantityDifference = -updatedItemQuantity;
+      if (item.isDeleted && isProductExistWithinPurchase) {
+        quantityDifference = -isProductExistWithinPurchase.quantity;
+      } else if (item.AddedWhenEdit) {
+        quantityDifference = item.quantity;
+      } else if (isProductExistWithinPurchase) {
+        quantityDifference =
+          item.quantity - isProductExistWithinPurchase.quantity;
       } else {
-        quantityDifference = oldWarehouseStock
-          ? updatedItemQuantity - oldWarehouseStock.quantity
-          : updatedItemQuantity;
+        quantityDifference = 0;
       }
-      if (oldWarehouseStock || item.isDeleted) {
+
+      const updatedItemQuantity =
+        operator === '*'
+          ? quantityDifference * conversionRatio
+          : quantityDifference / conversionRatio;
+      if (
+        // if the product deleted from the sale
+        item.isDeleted
+      ) {
+        // romove product from the items and increase quanity from product stock
+
         await Product.findOneAndUpdate(
           { _id: item.product, 'stock.warehouse': payload.warehouse },
-          { $inc: { 'stock.$.quantity': quantityDifference } },
-          { session },
+          { $inc: { 'stock.$.quantity': updatedItemQuantity } },
+          { session, new: true },
         );
+      } else if (isProductExistWithinPurchase?.quantity === item.quantity) {
+        // no need any changes because the quantity stil same
+        updatedItems.push(isProductExistWithinPurchase);
       } else {
-        await Product.findByIdAndUpdate(
-          { _id: item.product },
-          {
-            $push: {
-              stock: {
-                warehouse: payload.warehouse,
-                quantity: quantityDifference,
-              },
-            },
-          },
+        // product quantity changed, so that I need to update product stock and the item in the purchase
+        const { productTaxRate, productPrice, discountAmount, taxType } =
+          product;
+        const { taxAmount, subTotal, netUnitPrice } = calculateProductTotals({
+          quantity: item.quantity,
+          taxType,
+          productPrice,
+          productTaxRate,
+          discountAmount,
+        });
+
+        updatedItems.push({
+          ...product,
+          quantity: item.quantity,
+          product: product._id,
+          subTotal,
+          taxAmount,
+          netUnitPrice,
+          productTaxRate: product.productTaxRate || 0,
+        });
+
+        await Product.findOneAndUpdate(
+          { _id: item.product, 'stock.warehouse': payload.warehouse },
+          { $inc: { 'stock.$.quantity': updatedItemQuantity } },
           { session },
         );
       }
     }
+    //============== Loop End ====================
 
+    payload.items = updatedItems;
+    const sumOfAllSubTotal = payload.items.reduce((prev, current) => {
+      return (prev += current.subTotal);
+    }, 0);
+
+    if (sumOfAllSubTotal < payload.discountAmount) {
+      throw new AppError(
+        httpStatus.NOT_FOUND,
+        'Discount cannot exceed subtotal',
+      );
+    }
+    const totalTax =
+      (sumOfAllSubTotal - payload?.discountAmount) * (payload.taxRate / 100);
+
+    const grandTotal =
+      sumOfAllSubTotal + totalTax + payload.shipping - payload?.discountAmount;
+
+    payload.totalPurchaseAmount = grandTotal;
+    payload.dueAmount = grandTotal - payload.paidAmount;
+    payload.taxAmount = totalTax;
     const result = await Purchase.findOneAndUpdate({ purchaseId }, payload, {
       session,
     });
@@ -307,3 +344,136 @@ export const PurchaseService = {
   updatePurchase,
   deletePurchase,
 };
+
+// const updatePurchase = async (purchaseId: string, payload: TPurchase) => {
+//   const session = await startSession();
+//   session.startTransaction();
+
+//   // Check if purchase exists
+//   const purchase = await Purchase.findOne({ purchaseId });
+//   if (!purchase) {
+//     throw new AppError(httpStatus.NOT_FOUND, 'Purchase not found!!');
+//   }
+
+//   // Check if products exist
+//   if (!payload?.items || payload.items.length === 0) {
+//     throw new AppError(httpStatus.BAD_REQUEST, 'Please select products.');
+//   }
+
+//   // Clone previous payload items
+//   const previousItems = payload.items.map((item) => ({ ...item }));
+
+//   // Remove deleted items & update purchase
+//   const newItems = payload.items.filter((item) => !item.isDeleted);
+//   purchase.items = newItems;
+
+//   //  Recalculate Totals
+//   const sumOfAllSubTotal = payload.items.reduce((prev, current) => {
+//     const { subTotal } = calculateProductTotals(current);
+//     return (prev += subTotal);
+//   }, 0);
+//   console.log({ sumOfAllSubTotal });
+//   const totalTax =
+//     (sumOfAllSubTotal - payload?.discountAmount) * (payload.taxRate / 100);
+
+//   const grandTotal =
+//     sumOfAllSubTotal + totalTax + payload.shipping - payload.discountAmount;
+//   console.log({
+//     grandTotal,
+//     totalTax,
+//     shipping: payload.shipping,
+//     discount: payload.discountAmount,
+//   });
+//   payload.totalPurchaseAmount = grandTotal;
+//   payload.dueAmount = grandTotal - payload.paidAmount;
+//   payload.taxAmount = totalTax;
+
+//   try {
+//     for (const item of previousItems) {
+//       //@ts-ignore
+//       const product = await Product.findOne({ _id: item.product })
+//         .populate('productUnit')
+//         .populate('purchaseUnit');
+//       if (!product) {
+//         throw new AppError(
+//           httpStatus.NOT_FOUND,
+//           `${item.productName} is not found`,
+//         );
+//       }
+
+//       const { purchaseUnit, conversionRatio } = product.purchaseUnit as any;
+//       const updatedItemQuantity =
+//         purchaseUnit === '*'
+//           ? item.quantity * conversionRatio
+//           : item.quantity / conversionRatio;
+
+//       const oldWarehouseStock = product.stock.find(
+//         (stock) =>
+//           stock?.warehouse?.toString() === payload?.warehouse?.toString(),
+//       );
+
+//       // Recalculate item values
+//       item.productTaxRate = product.productTaxRate || 0;
+//       const { taxAmount, subTotal, netUnitPrice } =
+//         calculateProductTotals(item);
+
+//       // Update payload items
+//       payload.items = payload.items.map((payloadProductItem) =>
+//         payloadProductItem.product.toString() === item.product.toString()
+//           ? {
+//               ...payloadProductItem,
+//               product: payloadProductItem.product,
+//               subTotal,
+//               taxAmount,
+//               netUnitPrice,
+//               productTaxRate: product.productTaxRate || 0,
+//             }
+//           : payloadProductItem,
+//       );
+
+//       // Determine quantity difference
+//       let quantityDifference = 0;
+//       if (item.isDeleted) {
+//         quantityDifference = -updatedItemQuantity;
+//       } else {
+//         quantityDifference = oldWarehouseStock
+//           ? updatedItemQuantity - oldWarehouseStock.quantity
+//           : updatedItemQuantity;
+//       }
+//       if (oldWarehouseStock || item.isDeleted) {
+//         await Product.findOneAndUpdate(
+//           { _id: item.product, 'stock.warehouse': payload.warehouse },
+//           { $inc: { 'stock.$.quantity': quantityDifference } },
+//           { session },
+//         );
+//       } else {
+//         await Product.findByIdAndUpdate(
+//           { _id: item.product },
+//           {
+//             $push: {
+//               stock: {
+//                 warehouse: payload.warehouse,
+//                 quantity: quantityDifference,
+//               },
+//             },
+//           },
+//           { session },
+//         );
+//       }
+//     }
+
+//     const result = await Purchase.findOneAndUpdate({ purchaseId }, payload, {
+//       session,
+//     });
+
+//     // Commit the transaction
+//     await session.commitTransaction();
+//     session.endSession();
+
+//     return result;
+//   } catch (error) {
+//     await session.abortTransaction();
+//     session.endSession();
+//     throw error;
+//   }
+// };

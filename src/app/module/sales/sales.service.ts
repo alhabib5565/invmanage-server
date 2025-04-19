@@ -256,11 +256,6 @@ const updateSales = async (salesId: string, payload: TSales) => {
         );
       }
 
-      /**
-       * 1. new product add kora jai na// karon notun add kora product ta ager sale items er vitore exist kore na
-       * 2. prodct sale theke remove kore dile quantity increase hoi na.// ok but frotned theke deleted item ta ase na
-       */
-
       // find the product from sale
       const isProductExistWithinSale = sale.items.find(
         (saleItem) => saleItem.product.toString() === item.product.toString(),
@@ -286,13 +281,6 @@ const updateSales = async (salesId: string, payload: TSales) => {
 
       const { saleUnit: saleUnitOperator, conversionRatio } =
         product.saleUnit as any;
-      // Determine quantity difference
-      // const quantityDifference =
-      //   (item.isDeleted
-      //     ? isProductExistWithinSale?.quantity
-      //     : item.AddedWhenEdit
-      //       ? item.quantity
-      //       : isProductExistWithinSale?.quantity - item.quantity) || 0;
 
       // Determine quantity difference
       let quantityDifference = 0;
@@ -311,6 +299,7 @@ const updateSales = async (salesId: string, payload: TSales) => {
         saleUnitOperator === '*'
           ? quantityDifference * conversionRatio
           : quantityDifference / conversionRatio;
+
       if (
         // if the product deleted from the sale
         item.isDeleted
@@ -356,6 +345,7 @@ const updateSales = async (salesId: string, payload: TSales) => {
       }
     }
     //============== Loop End ====================
+
     payload.items = updatedSaleItems;
     const sumOfAllSubTotal = payload.items.reduce((prev, current) => {
       return (prev += current.subTotal);
