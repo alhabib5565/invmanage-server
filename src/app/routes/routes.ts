@@ -17,6 +17,7 @@ import { UnitRoutes } from '../module/unit/unit.route';
 import { PurchaseRoutes } from '../module/purchase/purchase.route';
 import { PurchaseReturnRoutes } from '../module/purchaseReturn/purchaseReturn.route';
 import { SalesRoutes } from '../module/sales/sales.route';
+import { SaleReturnRoutes } from '../module/salesReturn/salesReturn.route';
 
 const router = express.Router();
 
@@ -32,6 +33,10 @@ const appRoutes = [
   {
     path: '/purchase-returns',
     routes: PurchaseReturnRoutes,
+  },
+  {
+    path: '/sale-returns',
+    routes: SaleReturnRoutes,
   },
   {
     path: '/sales',
