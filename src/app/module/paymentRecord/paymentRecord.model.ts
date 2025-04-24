@@ -11,7 +11,7 @@ const PaymentRecordSchema = new Schema<TPaymentRecord>(
       ref: 'Employee',
       required: false,
     }, // Sales Executive
-    amountCollected: { type: Number, required: true },
+    amount: { type: Number, required: true },
     paymentMethod: {
       type: String,
       enum: ['Cash', 'Card', 'Bkash', 'Bank Transfer'],
@@ -19,6 +19,7 @@ const PaymentRecordSchema = new Schema<TPaymentRecord>(
       default: 'Cash',
     },
     isPaidDuringSale: { type: Boolean, default: false },
+    isRetrun: { type: Boolean, default: false },
     paymentDate: { type: Date, default: Date.now },
     notes: { type: String },
   },

@@ -8,6 +8,11 @@ import { Product } from '../product/product.model';
 import { startSession } from 'mongoose';
 import { Sales } from '../sales/sales.model';
 import { SaleReturn } from './salesReturn.model';
+import { TPaymentRecord } from '../paymentRecord/paymentRecord.interface';
+import { generatePaymentRecordId } from '../paymentRecord/paymentRecord.utils';
+import { PaymentRecord } from '../paymentRecord/paymentRecord.model';
+import { Customer } from '../customer/customer.model';
+import { generateSaleReturnID } from './salesRetrun.utils';
 
 const createSaleReturn = async (payload: TSaleReturn) => {
   // Check if the sale exists
@@ -24,14 +29,17 @@ const createSaleReturn = async (payload: TSaleReturn) => {
   }
 
   //get all return products details
-  const retrunProductDetails = await Product.find({
+  const returnProductDetails = await Product.find({
     _id: { $in: payload.returnItems.map((item) => item.product) },
   })
     .populate('saleUnit')
     .lean();
 
-  // Generate a unique return ID
-  // payload.returnID = await generateSaleReturnID();
+  const modifiedReturnItems = [];
+
+  const bulkProductsUpdates = [];
+  const bulkSalesUpdates = [];
+
   const session = await startSession();
   session.startTransaction();
 
@@ -39,7 +47,7 @@ const createSaleReturn = async (payload: TSaleReturn) => {
     let totalReturnAmount = 0;
     // ================= Loop Start ===================
     for (const returnItem of payload.returnItems) {
-      const product = retrunProductDetails.find(
+      const product = returnProductDetails.find(
         (itemFromPayload) =>
           itemFromPayload._id.toString() === returnItem.product.toString(),
       );
@@ -69,7 +77,7 @@ const createSaleReturn = async (payload: TSaleReturn) => {
       if (returnItem.quantity > returnItemFromSale.quantity) {
         throw new AppError(
           httpStatus.BAD_REQUEST,
-          'Retrun item is greter then sale item',
+          'Return item is greater than sale item',
         );
       }
 
@@ -81,7 +89,8 @@ const createSaleReturn = async (payload: TSaleReturn) => {
           : returnItem.quantity / conversionRatio;
       // Check if the product exists in the selected warehouse
       const warehouseStock = product.stock.find(
-        (stock) => stock?.warehouse?.toString() === sale?.warehouse?.toString(),
+        (stock) =>
+          stock?.warehouse?.toString() === payload?.warehouse?.toString(),
       );
 
       if (!warehouseStock) {
@@ -91,56 +100,97 @@ const createSaleReturn = async (payload: TSaleReturn) => {
         );
       }
 
-      // Update product stock
-      // const updatedProduct = await Product.findOneAndUpdate(
-      //   { _id: returnItem.product, 'stock.warehouse': payload.warehouse },
-      //   { $inc: { 'stock.$.quantity': returnQuantity } },
-      //   { session, new: true },
-      // );
-
-      // if (!updatedProduct) {
-      //   throw new AppError(
-      //     httpStatus.BAD_REQUEST,
-      //     'Failed to update product stock!',
-      //   );
-      // }
-
-      const { subTotal, netUnitPrice } = returnItemFromSale;
-      // **Due Amount Calculation**
-      // 500 - 1000
-      let dueAmount = sale.dueAmount - returnItemFromSale.subTotal;
-      console.log({
-        returnItemFromSale,
-        dueAmount,
-        'sale.dueAmount': sale.dueAmount,
-        'returnItemFromSale.subTotal':
-          subTotal - returnItem.quantity * netUnitPrice,
+      bulkProductsUpdates.push({
+        updateOne: {
+          filter: {
+            _id: returnItem.product,
+            'stock.warehouse': payload.warehouse,
+          },
+          update: { $inc: { 'stock.$.quantity': returnQuantity } },
+        },
       });
-      // note: dueAmount negetive hole payment record e ekta payment entry korte hobe je isRetrun: true hobe
+
+      const { netUnitPrice, taxAmount, quantity } = returnItemFromSale;
+
+      // ** Amount Calculation**
+      const retrunTaxAmount =
+        Number((taxAmount / quantity).toFixed(2)) * returnItem.quantity;
+      const returnSubTotal =
+        retrunTaxAmount + returnItem.quantity * netUnitPrice;
+      let dueAmount = sale.dueAmount - returnSubTotal;
+
+      modifiedReturnItems.push({
+        ...returnItem,
+        retrunSubTotal: returnSubTotal,
+      });
+
       if (dueAmount < 0) {
         dueAmount = 0; // Ensure dueAmount never goes negative
       }
 
       // Update sale details
-      // await Sales.findOneAndUpdate(
-      //   { _id: payload.sale, 'items.product': returnItem.product },
-      //   {
-      //     $inc: {
-      //       totalSaleAmount: -subTotal,
-      //       'items.$.subTotal': -subTotal,
-      //       'items.$.taxAmount': -taxAmount,
-      //       'items.$.quantity': -returnItem.quantity,
-      //     },
-      //     $set: { dueAmount }, // Update due amount
-      //   },
-      //   { session },
-      // );
-      totalReturnAmount += returnItemFromSale.subTotal;
+      bulkSalesUpdates.push({
+        updateOne: {
+          filter: { _id: payload.sale, 'items.product': returnItem.product },
+          update: {
+            $inc: {
+              totalSalesAmount: -returnSubTotal,
+              'items.$.subTotal': -returnSubTotal,
+              'items.$.taxAmount': -retrunTaxAmount,
+              'items.$.quantity': -returnItem.quantity,
+            },
+            $set: { dueAmount },
+          },
+        },
+      });
+      totalReturnAmount += returnSubTotal;
     }
     // ================= Loop End ========================
+    payload.returnItems = modifiedReturnItems;
     payload.totalReturnAmount = totalReturnAmount;
+
+    await Product.bulkWrite(bulkProductsUpdates, { session });
+    await Sales.bulkWrite(bulkSalesUpdates, { session });
+    // Generate a unique return ID
+    payload.returnID = await generateSaleReturnID();
+    // Step 1: create sale retrun
     const result = await SaleReturn.create([payload], { session });
 
+    // Step 2: Payment  (Jodi Due amount theke retrun amount beshi hoi tahole customer ke tk return dite hobe)
+    if (totalReturnAmount > sale.dueAmount) {
+      const paymentsData: Partial<TPaymentRecord> = {
+        customer: sale.customer,
+        sale: payload.sale,
+        paymentId: await generatePaymentRecordId(),
+        amount: totalReturnAmount - sale.dueAmount,
+      };
+      await PaymentRecord.create([paymentsData], { session });
+    }
+
+    // total due calculation
+    const customer = await Customer.findOne({ _id: sale.customer });
+    if (!customer) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Customer not found');
+    }
+    let totalDue;
+    if (customer.totalDue < totalReturnAmount) {
+      totalDue = 0;
+    } else {
+      totalDue = customer.totalDue - totalReturnAmount;
+    }
+    // Step 3:
+    await Customer.findOneAndUpdate(
+      { _id: sale.customer },
+      {
+        $inc: {
+          totalPurchased: -totalReturnAmount,
+        },
+        $set: {
+          totalDue,
+        },
+      },
+      { session },
+    );
     // Commit transaction
     await session.commitTransaction();
     session.endSession();

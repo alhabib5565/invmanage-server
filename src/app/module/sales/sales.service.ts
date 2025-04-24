@@ -38,7 +38,9 @@ const createSales = async (payload: TSales) => {
 
   const salesProductItems = await Product.find({
     _id: { $in: payload.items.map((item) => item.product) },
-  }).populate('saleUnit');
+  })
+    .populate('saleUnit')
+    .lean();
   const bulkSalesProduct = [];
 
   const session = await startSession();
@@ -155,7 +157,7 @@ const createSales = async (payload: TSales) => {
         customer: payload.customer,
         sale: saleData[0]._id,
         paymentId: await generatePaymentRecordId(),
-        amountCollected: payload.paidAmount,
+        amount: payload.paidAmount,
         isPaidDuringSale: true,
       };
 
@@ -217,7 +219,7 @@ const getSingleSales = async (salesId: string) => {
   });
   return result;
 };
-
+//problem: sale edit korle customer collection due abar add hoi
 const updateSales = async (salesId: string, payload: TSales) => {
   // Check if sale exists
   const sale = await Sales.findOne({ salesId }).lean();
@@ -347,6 +349,7 @@ const updateSales = async (salesId: string, payload: TSales) => {
     //============== Loop End ====================
 
     payload.items = updatedSaleItems;
+
     const sumOfAllSubTotal = payload.items.reduce((prev, current) => {
       return (prev += current.subTotal);
     }, 0);
@@ -359,19 +362,18 @@ const updateSales = async (salesId: string, payload: TSales) => {
     }
     const totalTax =
       (sumOfAllSubTotal - payload?.discountAmount) * (payload.taxRate / 100);
-
     const grandTotal =
       sumOfAllSubTotal + totalTax + payload.shipping - payload?.discountAmount;
-
     payload.totalSalesAmount = grandTotal;
     payload.dueAmount = grandTotal - payload.paidAmount;
+    console.log({ grandTotal, payloadP: payload.paidAmount });
     payload.taxAmount = totalTax;
-
     // Amount Calculation
     const dueAmountDifference = payload.dueAmount - sale.dueAmount;
     const paidAmountDifference = payload.paidAmount - sale.paidAmount;
     const totalSaleAmountDifference =
       payload.totalSalesAmount - sale.totalSalesAmount;
+
     // Step 1: Update Sale
     const result = await Sales.findOneAndUpdate({ salesId }, payload, {
       session,
@@ -382,7 +384,7 @@ const updateSales = async (salesId: string, payload: TSales) => {
     if (paidAmountDifference !== 0) {
       await PaymentRecord.findOneAndUpdate(
         { sale: sale._id, isPaidDuringSale: true },
-        { $inc: { amountCollected: paidAmountDifference } },
+        { $inc: { amount: paidAmountDifference } },
         { session },
       );
     }

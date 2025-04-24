@@ -17,7 +17,7 @@ const createPayment = async (payload: TPaymentRecord) => {
   if (!sale)
     throw new AppError(httpStatus.NOT_FOUND, 'Sale record not found!!');
 
-  if (sale?.dueAmount && sale?.dueAmount < payload.amountCollected) {
+  if (sale?.dueAmount && sale?.dueAmount < payload.amount) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
       `You've paid more than the due amount.`,
@@ -41,8 +41,8 @@ const createPayment = async (payload: TPaymentRecord) => {
       { _id: payload.customer },
       {
         $inc: {
-          totalPaid: payload.amountCollected,
-          totalDue: -payload.amountCollected, // Reduce Due
+          totalPaid: payload.amount,
+          totalDue: -payload.amount, // Reduce Due
         },
       },
       { session },
@@ -53,8 +53,8 @@ const createPayment = async (payload: TPaymentRecord) => {
       { _id: payload.sale },
       {
         $inc: {
-          dueAmount: -payload.amountCollected,
-          paidAmount: payload.amountCollected,
+          dueAmount: -payload.amount,
+          paidAmount: payload.amount,
         }, // Reduce Sale Due
       },
       { session },
